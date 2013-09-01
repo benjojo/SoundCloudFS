@@ -2,29 +2,45 @@
 using System.Net;
 using System.IO;
 using System.Collections;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Dokan;
 
 namespace SoundCloudFS
 {
-    class Mirror : DokanOperations
+    class SoundCloudFS : DokanOperations
     {
-        private string root_;
+        private string token_;
         private int count_;
-        public Mirror(string root)
+        private WebClient client;
+        public SoundCloudFS(string token)
         {
-            root_ = root;
+            token_ = token;
             count_ = 1;
+            client = new WebClient();
         }
 
-        private string GetPath(string filename)
+        #region API Zone
+        dynamic[] GetStreamLine()
         {
-            string path = root_ + filename;
-            Console.Error.WriteLine("GetPath : {0}", path);
-            return path;
+            try
+            {
+                // this is used to get the "stream" or timeline on the soundcloud app/frontpage
+                dynamic InitObj = JObject.Parse(client.DownloadString("https://api.soundcloud.com/e1/me/stream.json?oauth_token=" + token_ + "&limit=50"));
+                return InitObj.collection;
+            }
+            catch
+            {
+                Console.WriteLine("Failed to get stream/timeline.");
+                Console.Read();
+                Environment.Exit(1);
+            }
+            return null;
         }
+        #endregion
 
-        public int CreateFile(String filename, FileAccess access, FileShare share,
-            FileMode mode, FileOptions options, DokanFileInfo info)
+        #region Dokan Zone
+        public int CreateFile(String filename, FileAccess access, FileShare share, FileMode mode, FileOptions options, DokanFileInfo info)
         {
             /*
             string path = GetPath(filename);
@@ -43,9 +59,14 @@ namespace SoundCloudFS
                 return -DokanNet.ERROR_FILE_NOT_FOUND;
             //}
         }
-
+        // This is used
         public int OpenDirectory(String filename, DokanFileInfo info)
         {
+            Console.WriteLine("Attempting to open path {0}", filename);
+            if (filename == "\\")
+            {
+                return 0;
+            } 
             /*
             info.Context = count_++;
             if (Directory.Exists(GetPath(filename)))
@@ -69,9 +90,11 @@ namespace SoundCloudFS
         {
             return 0;
         }
-
+        // This is used
         public int ReadFile(String filename, Byte[] buffer, ref uint readBytes,long offset, DokanFileInfo info)
         {
+            Console.WriteLine("Attempting to open file {0}", filename);
+            /*
             try
             {
                 FileStream fs = File.OpenRead(GetPath(filename));
@@ -82,7 +105,8 @@ namespace SoundCloudFS
             catch (Exception)
             {
                 return -1;
-            }
+            }*/
+            return -1;
         }
 
         public int WriteFile(String filename, Byte[] buffer, ref uint writtenBytes, long offset, DokanFileInfo info)
@@ -127,9 +151,24 @@ namespace SoundCloudFS
             }*/
             return -1;
         }
-
+        // This is used
         public int FindFiles(String filename, ArrayList files, DokanFileInfo info)
         {
+            Console.WriteLine("listing files in {0}",filename);
+            if (filename == "\\")
+            {
+                // We need to chuck in a stream folder for now.
+                FileInformation fi = new FileInformation();
+                fi.Attributes = FileAttributes.Directory;
+                fi.FileName = "stream";
+                fi.CreationTime = DateTime.Today;
+                fi.LastAccessTime = DateTime.Now;
+                fi.LastWriteTime = DateTime.Now;
+                fi.Length = 1;
+                files.Add(fi);
+                // TODO: add user folders.
+                return 1;
+            }
             /*
             string path = GetPath(filename);
             if (Directory.Exists(path))
@@ -161,8 +200,7 @@ namespace SoundCloudFS
             return -1;
         }
 
-        public int SetFileTime(String filename, DateTime ctime,
-                DateTime atime, DateTime mtime, DokanFileInfo info)
+        public int SetFileTime(String filename, DateTime ctime, DateTime atime, DateTime mtime, DokanFileInfo info)
         {
             return -1;
         }
@@ -202,8 +240,7 @@ namespace SoundCloudFS
             return 0;
         }
 
-        public int GetDiskFreeSpace(ref ulong freeBytesAvailable, ref ulong totalBytes,
-            ref ulong totalFreeBytes, DokanFileInfo info)
+        public int GetDiskFreeSpace(ref ulong freeBytesAvailable, ref ulong totalBytes, ref ulong totalFreeBytes, DokanFileInfo info)
         {
             freeBytesAvailable = 512 * 1024 * 1024;
             totalBytes = 1024 * 1024 * 1024;
@@ -215,7 +252,7 @@ namespace SoundCloudFS
         {
             return 0;
         }
-
+        #endregion
         static void Main(string[] args)
         {
             WebClient client = new WebClient(); // I hope this works.
@@ -242,19 +279,50 @@ password");
                             + "&password=" + Deets[3];
             string soundCloudTokenRes = "https://api.soundcloud.com/oauth2/token";
             // Now we send off the API Request:
-            string tokenInfo = client.UploadString(soundCloudTokenRes, postData);
-            Console.WriteLine(tokenInfo);
+            string tokenInfo = "";
+            try
+            {
+                tokenInfo = client.UploadString(soundCloudTokenRes, postData);
+            }
+            catch
+            {
+                Console.WriteLine("Failed to auth with soundcloud.");
+                Console.Read();
+                Environment.Exit(1);
+            }
+            dynamic AuthInfo;
+            string AToken = "";
+            try
+            {
+                AuthInfo = JObject.Parse(tokenInfo);
+                AToken = AuthInfo.access_token;
+            }
+            catch
+            {
+                Console.WriteLine("Malformed responce from soundcloud D:");
+                Environment.Exit(1);
+            }
+            try
+            {
+                dynamic meobj = JObject.Parse(client.DownloadString("https://api.soundcloud.com/me.json?oauth_token=" + AToken));
+                Console.WriteLine("Thank you for using SoundcloudFS" + meobj.username);
+            }
+            catch
+            {
 
-            /*
+            }
+            Console.WriteLine("Starting Mounting process...");
+
+            
             DokanOptions opt = new DokanOptions();
             opt.DebugMode = true;
-            opt.MountPoint = "n:\\";
+            opt.MountPoint = "v:\\";
             opt.ThreadCount = 5;
-            int status = DokanNet.DokanMain(opt, new Mirror("C:"));
+            int status = DokanNet.DokanMain(opt, new SoundCloudFS(AToken));
             switch (status)
             {
                 case DokanNet.DOKAN_DRIVE_LETTER_ERROR:
-                    Console.WriteLine("Drvie letter error");
+                    Console.WriteLine("Driver letter error");
                     break;
                 case DokanNet.DOKAN_DRIVER_INSTALL_ERROR:
                     Console.WriteLine("Driver install error");
@@ -275,7 +343,7 @@ password");
                     Console.WriteLine("Unknown status: %d", status);
                     break;
 
-            }*/
+            }
         }
     }
 }
