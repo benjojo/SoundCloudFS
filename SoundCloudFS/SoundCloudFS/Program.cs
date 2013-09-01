@@ -13,6 +13,7 @@ namespace SoundCloudFS
         private string token_;
         private int count_;
         private WebClient client;
+        private string StreamList = "";
         public SoundCloudFS(string token)
         {
             token_ = token;
@@ -21,15 +22,25 @@ namespace SoundCloudFS
         }
 
         #region API Zone
-        dynamic[] GetStreamLine()
+        JArray GetStreamLine()
         {
             try
             {
                 // this is used to get the "stream" or timeline on the soundcloud app/frontpage
-                dynamic InitObj = JObject.Parse(client.DownloadString("https://api.soundcloud.com/e1/me/stream.json?oauth_token=" + token_ + "&limit=50"));
+                string boop;
+                if (StreamList == "")
+                {
+                    boop = client.DownloadString("https://api.soundcloud.com/e1/me/stream.json?oauth_token=" + token_ + "&limit=50");
+                    StreamList = boop;
+                }
+                else
+                {
+                    boop = StreamList;
+                }
+                dynamic InitObj = JObject.Parse(boop);
                 return InitObj.collection;
             }
-            catch
+            catch(Exception e)
             {
                 Console.WriteLine("Failed to get stream/timeline.");
                 Console.Read();
@@ -59,14 +70,18 @@ namespace SoundCloudFS
                 return -DokanNet.ERROR_FILE_NOT_FOUND;
             //}
         }
-        // This is used
-        public int OpenDirectory(String filename, DokanFileInfo info)
+
+        public int OpenDirectory(String filename, DokanFileInfo info) // This is used
         {
             Console.WriteLine("Attempting to open path {0}", filename);
             if (filename == "\\")
             {
                 return 0;
-            } 
+            }
+            else if (filename == "\\stream")
+            {
+                return 0;
+            }
             /*
             info.Context = count_++;
             if (Directory.Exists(GetPath(filename)))
@@ -90,8 +105,8 @@ namespace SoundCloudFS
         {
             return 0;
         }
-        // This is used
-        public int ReadFile(String filename, Byte[] buffer, ref uint readBytes,long offset, DokanFileInfo info)
+
+        public int ReadFile(String filename, Byte[] buffer, ref uint readBytes, long offset, DokanFileInfo info) // This is used
         {
             Console.WriteLine("Attempting to open file {0}", filename);
             /*
@@ -119,7 +134,7 @@ namespace SoundCloudFS
             return -1;
         }
 
-        public int GetFileInformation(String filename, FileInformation fileinfo, DokanFileInfo info)
+        public int GetFileInformation(String filename, FileInformation fileinfo, DokanFileInfo info) // I guess this is used?
         {
             /*
             string path = GetPath(filename);
@@ -151,8 +166,8 @@ namespace SoundCloudFS
             }*/
             return -1;
         }
-        // This is used
-        public int FindFiles(String filename, ArrayList files, DokanFileInfo info)
+
+        public int FindFiles(String filename, ArrayList files, DokanFileInfo info) // This is used
         {
             Console.WriteLine("listing files in {0}",filename);
             if (filename == "\\")
@@ -164,10 +179,33 @@ namespace SoundCloudFS
                 fi.CreationTime = DateTime.Today;
                 fi.LastAccessTime = DateTime.Now;
                 fi.LastWriteTime = DateTime.Now;
-                fi.Length = 1;
+                fi.Length = 0;
                 files.Add(fi);
                 // TODO: add user folders.
-                return 1;
+                return 0;
+            }
+            if (filename == "\\stream")
+            {
+                foreach (JObject a in GetStreamLine())
+                {
+                    try
+                    {
+                        FileInformation fi = new FileInformation();
+                        dynamic obj = JObject.Parse(a["track"].ToString()); // lolwtf
+                        fi.Attributes = FileAttributes.ReadOnly;
+                        fi.CreationTime = DateTime.Today;
+                        fi.LastAccessTime = DateTime.Now;
+                        fi.LastWriteTime = DateTime.Now;
+                        fi.FileName = obj.title + ".mp3";
+                        fi.Length = (obj.duration / 1000) * 16;
+                        files.Add(fi);
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Only a minor explosion happened. its fine.");
+                    }
+                }
+                return 0;
             }
             /*
             string path = GetPath(filename);
@@ -263,6 +301,8 @@ namespace SoundCloudFS
                 username
                 password
              */
+
+            
             if (Deets.Length != 4)
             {
                 Console.WriteLine("Please fill out the \"api_info.txt\" with the following:");
