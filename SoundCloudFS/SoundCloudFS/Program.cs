@@ -197,7 +197,7 @@ namespace SoundCloudFS
                         fi.LastAccessTime = DateTime.Now;
                         fi.LastWriteTime = DateTime.Now;
                         fi.FileName = obj.title + ".mp3";
-                        fi.Length = (obj.duration / 1000) * 16;
+                        fi.Length = (obj.duration / 1000) * 16 * 1024;
                         files.Add(fi);
                     }
                     catch
