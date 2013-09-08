@@ -11,13 +11,13 @@ namespace SoundCloudFS
     class SoundCloudFS : DokanOperations
     {
         private string token_;
-        private int count_;
+        private string cl_ID_;
         private WebClient client;
         private string StreamList = "";
-        public SoundCloudFS(string token)
+        public SoundCloudFS(string token,string clientid)
         {
             token_ = token;
-            count_ = 1;
+            cl_ID_ = clientid;
             client = new WebClient();
         }
 
@@ -48,6 +48,30 @@ namespace SoundCloudFS
             }
             return null;
         }
+
+        string GetSCFile(dynamic trackobj)
+        {
+            try
+            {
+                Console.WriteLine("Fetching Track " + trackobj.id);
+                string SaveDir = Path.GetTempPath();
+                if (File.Exists(SaveDir + "/SCFSTemp" + trackobj.id))
+                {
+                    return SaveDir + "/SCFSTemp" + trackobj.id;
+                }
+                client.DownloadFile(trackobj.stream_url + "&secret_token&client_id=" + cl_ID_, SaveDir + "/SCFSTemp" + trackobj.id);
+                return SaveDir + "/SCFSTemp" + trackobj.id;
+            }
+            catch
+            {
+                Console.WriteLine("Failed to get track!!!");
+                Console.Read();
+                Environment.Exit(0);
+                return ""; // Keep VS happy I guess
+            }
+
+        }
+
         #endregion
 
         #region Dokan Zone
@@ -109,6 +133,10 @@ namespace SoundCloudFS
         public int ReadFile(String filename, Byte[] buffer, ref uint readBytes, long offset, DokanFileInfo info) // This is used
         {
             Console.WriteLine("Attempting to open file {0}", filename);
+            if (filename.StartsWith("\\stream\\"))
+            {
+                Console.WriteLine("Reasonable request.");
+            }
             /*
             try
             {
@@ -136,6 +164,33 @@ namespace SoundCloudFS
 
         public int GetFileInformation(String filename, FileInformation fileinfo, DokanFileInfo info) // I guess this is used?
         {
+            if (filename.StartsWith("\\stream"))
+            {
+                foreach (JObject a in GetStreamLine())
+                {
+                    try
+                    {
+                        dynamic obj = JObject.Parse(a["track"].ToString()); // lolwtf
+                        if (obj.title == filename.Replace(@"\stream\", ""))
+                        {
+                            fileinfo.Attributes = FileAttributes.Normal;
+                            fileinfo.CreationTime = DateTime.Today;
+                            fileinfo.LastAccessTime = DateTime.Now;
+                            fileinfo.LastWriteTime = DateTime.Now;
+                            fileinfo.FileName = obj.title + ".mp3";
+                            fileinfo.Length = (obj.duration / 1000) * 16 * 1024;
+                            return 0;
+                        }
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Nothing bad ever happened.");
+                        return -1;
+                    }
+                }
+                return -1;
+            }
+            return -1;
             /*
             string path = GetPath(filename);
             if (File.Exists(path))
@@ -192,7 +247,7 @@ namespace SoundCloudFS
                     {
                         FileInformation fi = new FileInformation();
                         dynamic obj = JObject.Parse(a["track"].ToString()); // lolwtf
-                        fi.Attributes = FileAttributes.ReadOnly;
+                        fi.Attributes = FileAttributes.Normal;
                         fi.CreationTime = DateTime.Today;
                         fi.LastAccessTime = DateTime.Now;
                         fi.LastWriteTime = DateTime.Now;
@@ -358,7 +413,7 @@ password");
             opt.DebugMode = true;
             opt.MountPoint = "v:\\";
             opt.ThreadCount = 5;
-            int status = DokanNet.DokanMain(opt, new SoundCloudFS(AToken));
+            int status = DokanNet.DokanMain(opt, new SoundCloudFS(AToken,Deets[1]));
             switch (status)
             {
                 case DokanNet.DOKAN_DRIVE_LETTER_ERROR:
