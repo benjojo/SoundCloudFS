@@ -49,6 +49,24 @@ namespace SoundCloudFS
             return null;
         }
 
+        string GetSCURL(string EntryName)
+        {
+            JArray Stream = GetStreamLine();
+            foreach (JObject a in GetStreamLine())
+            {
+                dynamic obj = JObject.Parse(a["track"].ToString()); // lolwtf
+                if (obj.name == EntryName)
+                {
+                    return obj.stream_url + "&secret_token&client_id=" + cl_ID_;
+                }
+            }
+            return "";
+            /*HttpWebRequest request = (HttpWebRequest) WebRequest.Create(url);
+            HttpWebResponse response = (HttpWebResponse) request.GetResponse();
+
+            Stream stream = new Stream(response.GetResponseStream());*/
+        }
+
         string GetSCFile(dynamic trackobj)
         {
             try
