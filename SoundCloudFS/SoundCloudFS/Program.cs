@@ -61,10 +61,6 @@ namespace SoundCloudFS
                 }
             }
             return "";
-            /*HttpWebRequest request = (HttpWebRequest) WebRequest.Create(url);
-            HttpWebResponse response = (HttpWebResponse) request.GetResponse();
-
-            Stream stream = new Stream(response.GetResponseStream());*/
         }
 
         string GetSCFile(dynamic trackobj)
@@ -154,6 +150,13 @@ namespace SoundCloudFS
             if (filename.StartsWith("\\stream\\"))
             {
                 Console.WriteLine("Reasonable request.");
+                string endname = filename.Split('\\')[filename.Split('\\').Length - 1];
+                string TargetURL = GetSCURL(endname.Replace(".mp3", ""));
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(TargetURL);
+                request.AddRange((int)offset, buffer.Length);
+                HttpWebResponse response = (HttpWebResponse) request.GetResponse();
+                Stream streamm = response.GetResponseStream();
+                int w = streamm.Read(buffer, (int)offset, (int)readBytes);
             }
             /*
             try
