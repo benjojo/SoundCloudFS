@@ -105,6 +105,7 @@ namespace SoundCloudFS
             }
             else
             {*/
+            if (share == FileShare.Read || share == FileShare.ReadWrite) { return 0; }
                 return -DokanNet.ERROR_FILE_NOT_FOUND;
             //}
         }
